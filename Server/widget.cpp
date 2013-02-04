@@ -1,5 +1,10 @@
+// Project
 #include "widget.h"
 #include "ui_widget.h"
+#include "session.h"
+
+// Qt
+#include <QThread>
 
 Widget::Widget(QWidget *parent) :
     QWidget(parent),
@@ -10,6 +15,7 @@ Widget::Widget(QWidget *parent) :
 
     ui->startButton->setCheckable(true);
     connect(ui->startButton, SIGNAL(toggled(bool)), this, SLOT(setUpServer(bool)));
+    connect(this, SIGNAL(message(QString)), this, SLOT(newMessage(QString)));
 }
 
 void Widget::setUpServer(bool status)
@@ -36,7 +42,7 @@ void Widget::setUpServer(bool status)
     }
     else
     {
-        client->close();
+        emit done();
         tcp_server->close();
         ui->startButton->setText("Start server");
     }
@@ -53,11 +59,12 @@ void Widget::pressedSend()
         ui->lineEdit->clear();
         time = time.currentTime();
         temp = time.toString("HH:mm:ss") + ":  " + text;
-        QByteArray array = temp.toAscii();
-        client->write(array);
         temp.push_front("<b>");
         temp.append("</b>");
         ui->textBrowser->append(temp);
+
+        // Send the message to all threads
+        emit message(temp);
     }
 }
 
@@ -68,16 +75,22 @@ void Widget::clientDisconnected()
 
 void Widget::handleConnection()
 {
-        client = tcp_server->nextPendingConnection();
-        connect(client, SIGNAL(readyRead()), this, SLOT(read()));
-        connect(client, SIGNAL(disconnected()), this, SLOT(clientDisconnected()));
-        ui->textBrowser->setText("Client connected!");
+    Session *session = new Session(tcp_server->nextPendingConnection(), this);
+    QThread *session_thread = new QThread(this);
+
+    connect(this, SIGNAL(message(QString)), session, SLOT(sendMessage(QString)));
+    connect(this, SIGNAL(done()), session, SLOT(disconnect()));
+    connect(session, SIGNAL(messageRecieved(QString)), this, SIGNAL(message(QString)));
+    connect(session, SIGNAL(closed()), this, SLOT(clientDisconnected()));
+
+    session->moveToThread(session_thread);
+
+    ui->textBrowser->setText("Client connected!");
 }
 
-void Widget::read()
+void Widget::newMessage(QString message)
 {
-    QString string = client->readAll();
-    ui->textBrowser->append(string);
+    ui->textBrowser->append(message);
 }
 
 Widget::~Widget()

@@ -11,6 +11,7 @@ namespace Ui {
 class Widget;
 }
 
+
 class Widget : public QWidget
 {
     Q_OBJECT
@@ -25,12 +26,17 @@ private:
     int teller;
     Ui::Widget *ui;
 
+signals:
+    void message(QString);
+    void done();
+        
+
 private slots:
     void clientDisconnected();
     void setUpServer(bool);
     void pressedSend();
     void handleConnection();
-    void read();
+    void newMessage(QString);
 };
 
 #endif // WIDGET_H
